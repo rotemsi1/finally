@@ -1,62 +1,68 @@
 # FinAlly — AI Trading Workstation
 
-A visually stunning AI-powered trading workstation that streams live market data, simulates portfolio trading, and integrates an LLM chat assistant that can analyze positions and execute trades via natural language.
-
-Built entirely by coding agents as a capstone project for an agentic AI coding course.
+A visually stunning AI-powered trading workstation that streams live market data, lets you trade a simulated portfolio, and integrates an LLM chat assistant that can analyze positions and execute trades on your behalf. Looks and feels like a Bloomberg terminal with an AI copilot.
 
 ## Features
 
-- **Live price streaming** via SSE with green/red flash animations
-- **Simulated portfolio** — $10k virtual cash, market orders, instant fills
-- **Portfolio visualizations** — heatmap (treemap), P&L chart, positions table
-- **AI chat assistant** — analyzes holdings, suggests and auto-executes trades
-- **Watchlist management** — track tickers manually or via AI
-- **Dark terminal aesthetic** — Bloomberg-inspired, data-dense layout
-
-## Architecture
-
-Single Docker container serving everything on port 8000:
-
-- **Frontend**: Next.js (static export) with TypeScript and Tailwind CSS
-- **Backend**: FastAPI (Python/uv) with SSE streaming
-- **Database**: SQLite with lazy initialization
-- **AI**: LiteLLM → OpenRouter (Cerebras inference) with structured outputs
-- **Market data**: Built-in GBM simulator (default) or Massive API (optional)
+- **Live price streaming** via SSE — prices flash green/red on every tick
+- **Sparkline mini-charts** that accumulate from the live stream
+- **Buy & sell** with instant market orders against $10,000 virtual cash
+- **Portfolio heatmap** (treemap) sized by weight, colored by P&L
+- **P&L chart** tracking total portfolio value over time
+- **AI chat assistant** — ask questions, get analysis, and let the AI execute trades and manage your watchlist through natural language
 
 ## Quick Start
 
-```bash
-# Clone and configure
-cp .env.example .env
-# Add your OPENROUTER_API_KEY to .env
+### Prerequisites
 
-# Run with Docker
+- Docker
+- An OpenAI API key
+
+### Setup
+
+```bash
+# 1. Clone the repo
+git clone <repo-url>
+cd finally
+
+# 2. Create your .env file
+cp .env.example .env
+# Edit .env and add your OPENAI_API_KEY
+
+# 3. Build and run
 docker build -t finally .
 docker run -v finally-data:/app/db -p 8000:8000 --env-file .env finally
-
-# Open http://localhost:8000
 ```
+
+Open `http://localhost:8000` in your browser.
 
 ## Environment Variables
 
 | Variable | Required | Description |
 |---|---|---|
-| `OPENROUTER_API_KEY` | Yes | OpenRouter API key for AI chat |
-| `MASSIVE_API_KEY` | No | Massive (Polygon.io) key for real market data; omit to use simulator |
-| `LLM_MOCK` | No | Set `true` for deterministic mock LLM responses (testing) |
+| `OPENAI_API_KEY` | Yes | Powers the AI chat assistant |
+| `MASSIVE_API_KEY` | No | Use real market data (omit to use the built-in simulator) |
+| `LLM_MOCK` | No | Set `true` for deterministic mock responses (testing) |
 
-## Project Structure
+## Architecture
+
+Single Docker container on port 8000:
+
+- **Frontend**: Next.js (TypeScript), built as a static export and served by FastAPI
+- **Backend**: FastAPI (Python/uv) — REST API, SSE streaming, LLM integration
+- **Database**: SQLite (volume-mounted, auto-initialized with seed data)
+- **Market data**: Built-in GBM simulator by default; Massive REST API if key provided
+
+## Development
 
 ```
 finally/
-├── frontend/    # Next.js static export
-├── backend/     # FastAPI uv project
-├── planning/    # Project documentation and agent contracts
-├── test/        # Playwright E2E tests
-├── db/          # SQLite volume mount (runtime)
-└── scripts/     # Start/stop helpers
+├── frontend/     # Next.js TypeScript project
+├── backend/      # FastAPI uv project (Python)
+├── planning/     # Project documentation
+├── scripts/      # Start/stop helper scripts
+├── test/         # Playwright E2E tests
+└── db/           # Volume mount target for SQLite
 ```
 
-## License
-
-See [LICENSE](LICENSE).
+See `backend/README.md` for backend-specific setup and `planning/PLAN.md` for full project specification.

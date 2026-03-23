@@ -4,9 +4,13 @@
 
 ## 1. Vision
 
+
+## 1. Vision
+
 FinAlly (Finance Ally) is a visually stunning AI-powered trading workstation that streams live market data, lets users trade a simulated portfolio, and integrates an LLM chat assistant that can analyze positions and execute trades on the user's behalf. It looks and feels like a modern Bloomberg terminal with an AI copilot.
 
 This is the capstone project for an agentic AI coding course. It is built entirely by Coding Agents demonstrating how orchestrated AI agents can produce a production-quality full-stack application. Agents interact through files in `planning/`.
+
 
 ## 2. User Experience
 
@@ -66,7 +70,7 @@ The user runs a single Docker command (or a provided start script). A browser op
 - **Backend**: FastAPI (Python), managed as a `uv` project
 - **Database**: SQLite, single file at `db/finally.db`, volume-mounted for persistence
 - **Real-time data**: Server-Sent Events (SSE) — simpler than WebSockets, one-way server→client push, works everywhere
-- **AI integration**: LiteLLM → OpenRouter (Cerebras for fast inference), with structured outputs for trade execution
+- **AI integration**: OpenAI API, with structured outputs for trade execution
 - **Market data**: Environment-variable driven — simulator by default, real data via Massive API if key provided
 
 ### Why These Choices
@@ -121,16 +125,14 @@ finally/
 ## 5. Environment Variables
 
 ```bash
-# Required: OpenRouter API key for LLM chat functionality
-OPENROUTER_API_KEY=your-openrouter-api-key-here
+# Required: OpenAI API key for LLM chat functionality
+OPENAI_API_KEY=your-openai-api-key-here
 
 # Optional: Massive (Polygon.io) API key for real market data
-# If not set, the built-in market simulator is used (recommended for most users)
 MASSIVE_API_KEY=
 
 # Optional: Set to "true" for deterministic mock LLM responses (testing)
 LLM_MOCK=false
-```
 
 ### Behavior
 
@@ -281,26 +283,30 @@ All tables include a `user_id` column defaulting to `"default"`. This is hardcod
 
 ## 9. LLM Integration
 
-When writing code to make calls to LLMs, use cerebras-inference skill to use LiteLLM via OpenRouter to the `openrouter/openai/gpt-oss-120b` model with Cerebras as the inference provider. Structured Outputs should be used to interpret the results.
+The backend integrates with the OpenAI API to power the AI trading assistant. Structured outputs are used to interpret responses and execute actions.
 
-There is an OPENROUTER_API_KEY in the .env file in the project root.
+There is an `OPENAI_API_KEY` in the `.env` file in the project root.
 
-### How It Works
+---
+
+## How It Works
 
 When the user sends a chat message, the backend:
 
 1. Loads the user's current portfolio context (cash, positions with P&L, watchlist with live prices, total portfolio value)
 2. Loads recent conversation history from the `chat_messages` table
 3. Constructs a prompt with a system message, portfolio context, conversation history, and the user's new message
-4. Calls the LLM via LiteLLM → OpenRouter, requesting structured output, using the cerebras-inference skill
-5. Parses the complete structured JSON response
+4. Calls the OpenAI API, requesting structured JSON output
+5. Parses the response
 6. Auto-executes any trades or watchlist changes specified in the response
 7. Stores the message and executed actions in `chat_messages`
-8. Returns the complete JSON response to the frontend (no token-by-token streaming — Cerebras inference is fast enough that a loading indicator is sufficient)
+8. Returns the complete JSON response to the frontend
 
-### Structured Output Schema
+---
 
-The LLM is instructed to respond with JSON matching this schema:
+## Structured Output Schema
+
+The LLM must respond with JSON matching this schema:
 
 ```json
 {
@@ -312,37 +318,6 @@ The LLM is instructed to respond with JSON matching this schema:
     {"ticker": "PYPL", "action": "add"}
   ]
 }
-```
-
-- `message` (required): The conversational text shown to the user
-- `trades` (optional): Array of trades to auto-execute. Each trade goes through the same validation as manual trades (sufficient cash for buys, sufficient shares for sells)
-- `watchlist_changes` (optional): Array of watchlist modifications
-
-### Auto-Execution
-
-Trades specified by the LLM execute automatically — no confirmation dialog. This is a deliberate design choice:
-- It's a simulated environment with fake money, so the stakes are zero
-- It creates an impressive, fluid demo experience
-- It demonstrates agentic AI capabilities — the core theme of the course
-
-If a trade fails validation (e.g., insufficient cash), the error is included in the chat response so the LLM can inform the user.
-
-### System Prompt Guidance
-
-The LLM should be prompted as "FinAlly, an AI trading assistant" with instructions to:
-- Analyze portfolio composition, risk concentration, and P&L
-- Suggest trades with reasoning
-- Execute trades when the user asks or agrees
-- Manage the watchlist proactively
-- Be concise and data-driven in responses
-- Always respond with valid structured JSON
-
-### LLM Mock Mode
-
-When `LLM_MOCK=true`, the backend returns deterministic mock responses instead of calling OpenRouter. This enables:
-- Fast, free, reproducible E2E tests
-- Development without an API key
-- CI/CD pipelines
 
 ---
 
@@ -454,3 +429,39 @@ The container is designed to deploy to AWS App Runner, Render, or any container 
 - Portfolio visualization: heatmap renders with correct colors, P&L chart has data points
 - AI chat (mocked): send a message, receive a response, trade execution appears inline
 - SSE resilience: disconnect and verify reconnection
+
+---
+
+## 13. Review Notes
+
+### Issues & Clarifications Needed
+
+1. **Duplicate section header**: Section 1 "Vision" appears twice (lines 5 and 8). One should be removed.
+
+2. **Unclosed code fence in Section 9**: The structured output JSON block (```json) is never closed with a closing ```. This will break rendering in any Markdown viewer.
+
+3. **Section 9 heading is misplaced**: "How It Works" and "Structured Output Schema" are subsections of Section 9 (LLM Integration) but appear *after* a `---` separator, making them look like a separate top-level section. They should be indented under Section 9.
+
+4. **`MASSIVE_API_KEY` label says "Polygon.io"**: The comment says `# Optional: Massive (Polygon.io) API key`. Is "Massive" actually a Polygon.io wrapper or a separate service? Clarify so agents know what base URL / SDK to use.
+
+5. **How many chat history messages are loaded?**: Step 2 of the LLM flow says "loads recent conversation history" — no limit is specified. Should there be a cap (e.g., last 20 messages) to avoid exceeding the context window?
+
+6. **`watchlist_changes` action values**: The schema shows `"action": "add"` but never defines `"remove"`. Confirm `"remove"` is the expected value for deletion, and add it to the example or schema description.
+
+7. **`/api/portfolio/trade` vs `/api/trades`**: The trade endpoint is nested under `/portfolio` but trades are also their own DB table. Is there a `GET /api/trades` endpoint for trade history? It's absent from Section 8 but useful for the positions table UX.
+
+8. **Portfolio snapshot cadence vs SSE cadence**: Snapshots are every 30 seconds; SSE pushes every ~500ms. The P&L chart will therefore be coarse even though prices are streaming fast. Is that intentional? Should snapshots happen more frequently (e.g., every 5s)?
+
+9. **`daily change %` in watchlist**: The watchlist panel spec calls for "daily change %" but the simulator has no concept of a daily open price — it only tracks current vs. previous tick. Clarify whether this means tick-over-tick change or true daily % change, and if the latter, how it's computed.
+
+10. **No endpoint to fetch chart history for a single ticker**: The main chart area shows price-over-time for a selected ticker, but there's no API endpoint for historical ticker prices. Sparklines are built client-side from SSE, but is the main chart also client-side only, or should there be a `GET /api/prices/{ticker}/history` endpoint?
+
+### Simplification Opportunities
+
+- **`users_profile` table**: With a hardcoded single user, this table is essentially a single-row config. Consider just storing cash balance in the `portfolio_snapshots` or as a constant that can be reset — though keeping the table is fine if multi-user is a real future goal.
+
+- **`id` column on `watchlist` and `positions`**: These tables have a UUID `id` PK but are uniquely identified by `(user_id, ticker)`. The UUID adds complexity without benefit in a single-user app; the composite key could serve as the PK directly.
+
+- **Separate start/stop scripts per OS**: `start_mac.sh` and `start_windows.ps1` likely differ by only a few lines. A note on what exactly differs (path separators, `open` vs `start` for browser) would help agents keep them in sync.
+
+- **`docker-compose.yml` vs direct `docker run`**: The plan mentions both. Clarify which is the canonical path for local dev (and whether `docker-compose.yml` is the same as the `start_*.sh` wrapper, or separate).
